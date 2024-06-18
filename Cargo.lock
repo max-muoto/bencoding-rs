@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "bencoding-rs"
+name = "bencoding"
 version = "0.1.0"
