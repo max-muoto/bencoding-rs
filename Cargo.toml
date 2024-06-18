@@ -2,5 +2,12 @@
 name = "bencoding"
 version = "0.1.0"
 edition = "2021"
+authors = ["Maxwell Muoto <maxmuoto@gmail.com>"]
+description = "A library for decoding bencoded data"
+license = "MIT"
+repository = "https://github.com/max-muoto/bencoding-rs"
+readme = "README.md"
+keywords = ["bencoding", "decoding"]
+categories = ["decoding", "parsing"]
 
 [dependencies]
