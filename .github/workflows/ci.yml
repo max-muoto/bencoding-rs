@@ -33,4 +33,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: "Run tests"
-        run: cargo tes
+        run: cargo test
