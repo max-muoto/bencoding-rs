@@ -1,6 +1,6 @@
 [package]
 name = "bencoding"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Maxwell Muoto <maxmuoto@gmail.com>"]
 description = "A library for decoding bencoded data"
