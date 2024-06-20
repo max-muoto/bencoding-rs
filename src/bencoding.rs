@@ -17,11 +17,61 @@ pub enum Bencode {
     /// Represents an integer value.
     Int(i64),
     /// Represents a string value.
-    Str(String),
+    Str(Vec<u8>),
     /// Represents a list of bencode values.
     List(Vec<Bencode>),
     /// Represents a dictionary of bencode values.
     Dict(HashMap<String, Bencode>),
+}
+
+impl Bencode {
+    /// Returns the integer value if this is a `Bencode::Int`.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the integer value or `None` if this is not a `Bencode::Int`.
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            Bencode::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    /// Returns the string value if this is a `Bencode::Str`.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the string value or `None` if this is not a `Bencode::Str`.
+    pub fn as_bytes(&self) -> Option<&Vec<u8>> {
+        match self {
+            Bencode::Str(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Returns the list value if this is a `Bencode::List`.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the list value or `None` if this is not a `Bencode::List`.
+    pub fn as_list(&self) -> Option<&Vec<Bencode>> {
+        match self {
+            Bencode::List(l) => Some(l),
+            _ => None,
+        }
+    }
+
+    /// Returns the dictionary value if this is a `Bencode::Dict`.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the dictionary value or `None` if this is not a `Bencode::Dict`.
+    pub fn as_dict(&self) -> Option<&HashMap<String, Bencode>> {
+        match self {
+            Bencode::Dict(d) => Some(d),
+            _ => None,
+        }
+    }
 }
 
 struct Decoder<'a> {
@@ -73,7 +123,11 @@ impl<'a> Decoder<'a> {
                 _ => return Err(ParseError::InvalidByte(self.pos)),
             };
             let value = self.parse()?;
-            dict.insert(key.to_string(), value);
+            let key = match String::from_utf8(key) {
+                Ok(s) => s,
+                Err(_) => return Err(ParseError::InvalidUtf8),
+            };
+            dict.insert(key, value);
         }
         self.pos += 1; // Skip the 'e'
         Ok(Bencode::Dict(dict))
@@ -98,10 +152,7 @@ impl<'a> Decoder<'a> {
         let s = &self.stream[self.pos..self.pos + str_size];
         self.pos += str_size;
 
-        match String::from_utf8(s.to_vec()) {
-            Ok(string) => Ok(Bencode::Str(string)),
-            Err(_) => Err(ParseError::InvalidUtf8),
-        }
+        Ok(Bencode::Str(s.to_vec()))
     }
 
     fn parse_int(&mut self) -> Result<Bencode, ParseError> {
@@ -150,12 +201,21 @@ pub fn decode(stream: &[u8]) -> Result<Bencode, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
+
+    /// Helper function to read a file into a byte vector.
+    fn read_file(path: &str) -> Vec<u8> {
+        let mut file = std::fs::File::open(path).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
 
     #[test]
     fn test_decode_str() {
         let mut decoder = Decoder::new(b"4:spam");
         let result = decoder.decode().unwrap();
-        assert_eq!(result, Bencode::Str("spam".to_string()));
+        assert_eq!(result, Bencode::Str("spam".into()));
     }
 
     #[test]
@@ -194,8 +254,8 @@ mod tests {
         assert_eq!(
             result,
             Bencode::List(vec![
-                Bencode::Str("spam".to_string()),
-                Bencode::Str("eggs".to_string())
+                Bencode::Str("spam".into()),
+                Bencode::Str("eggs".into())
             ])
         );
     }
@@ -205,8 +265,43 @@ mod tests {
         let mut decoder = Decoder::new(b"d3:cow3:moo4:spam4:eggse");
         let result = decoder.decode().unwrap();
         let mut expected_dict = HashMap::new();
-        expected_dict.insert("cow".to_string(), Bencode::Str("moo".to_string()));
-        expected_dict.insert("spam".to_string(), Bencode::Str("eggs".to_string()));
+        expected_dict.insert("cow".to_string(), Bencode::Str("moo".into()));
+        expected_dict.insert("spam".to_string(), Bencode::Str("eggs".into()));
         assert_eq!(result, Bencode::Dict(expected_dict));
+    }
+
+    #[test]
+    fn test_decode_torrent() {
+        // Read the file into a byte vector
+        let path = "test_data/linuxmint.torrent";
+        let torrent_stream = read_file(path);
+
+        // Decode the torrent file (assuming you have a `decode` function handling Bencoding)
+        let result = decode(&torrent_stream).expect("Failed to decode");
+
+        // Check for required keys in the top-level dictionary
+        let required_keys = [
+            "announce",
+            "created by",
+            "creation date",
+            "encoding",
+            "info",
+        ];
+        for key in required_keys {
+            assert!(result.as_dict().unwrap().contains_key(key));
+        }
+
+        // Check for required keys in the "info" dictionary
+        let info_dict = result
+            .as_dict()
+            .unwrap()
+            .get("info")
+            .unwrap()
+            .as_dict()
+            .unwrap();
+        let required_keys = ["name", "piece length", "pieces"];
+        for key in required_keys {
+            assert!(info_dict.contains_key(key));
+        }
     }
 }
